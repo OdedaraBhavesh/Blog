@@ -23,7 +23,21 @@
                 <section class="mb-5">
                     <p class="fs-5 mb-4">{{ single_blog.short_description }}</p>
                     <p class="fs-5 mb-4">{{ single_blog.blog_body }}</p>
-
+                    <!-- Like Button -->
+                    <a href="{% url 'react_post' single_blog.id %}" class="btn btn-success">
+                        👍 Like
+                    </a>
+                    <p>Likes: {{ single_blog.reaction_set.count }}</p>
+                    <!-- Bookmark Button -->
+                    <a href="{% url 'bookmark_post' single_blog.id %}" class="btn btn-primary">
+                        📌 Bookmark
+                    </a>
+                    <!-- Follow Button -->
+                    {% if user.is_authenticated and user != single_blog.author %}
+                        <a href="{% url 'follow_user' single_blog.author.id %}" class="btn btn-outline-primary">
+                            👤 Follow
+                        </a>
+                    {% endif %}
                     <!-- Comments -->
                     <h4>Comments ({{ comment_count }})</h4>
                     {% if comments %}
@@ -79,16 +93,7 @@
                 </div>
             </div>
             <!-- Side widget-->
-            {% if social_links %}
-            <div class="card mb-4 p-3">
-                <h4 class="font-italic">Follow Us</h4>
-                <ol class="list-unstyled">
-                    {% for i in social_links %}
-                    <li><a href="{{ i.link }}" target="_blank">{{ i.platform }}</a></li>
-                    {% endfor %}
-                </ol>
-            </div>
-            {% endif %}
+            
         </div>
     </div>
 </div>
