@@ -1,8 +1,10 @@
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.models import User
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 
-from .models import Blog, Category, Comment, Reaction, Bookmark, Tag, Follow
+from .models import Blog, Category, Comment, Reaction, Bookmark, Follow, UserProfile
 from django.db.models import Q
 
 def posts_by_category(request, category_id):
@@ -27,6 +29,8 @@ def posts_by_category(request, category_id):
 def blogs(request, slug):
     single_blog = get_object_or_404(Blog, slug=slug, status='Published')
     if request.method == 'POST':
+        if not request.user.is_authenticated:
+            return redirect('login')
         comment = Comment()
         comment.user = request.user
         comment.blog = single_blog
@@ -45,6 +49,28 @@ def blogs(request, slug):
     }
     return render(request, 'blogs.html', context)
 
+
+def author_profile(request, username):
+    author = get_object_or_404(User, username=username)
+    profile, created = UserProfile.objects.get_or_create(user=author)
+    posts = Blog.objects.filter(author=author, status='Published').order_by('-created_at')
+    followers_count = author.followers.count()
+    following_count = author.following.count()
+    is_following = False
+
+    if request.user.is_authenticated:
+        is_following = Follow.objects.filter(follower=request.user, following=author).exists()
+
+    context = {
+        'author': author,
+        'profile': profile,
+        'posts': posts,
+        'followers_count': followers_count,
+        'following_count': following_count,
+        'is_following': is_following,
+    }
+    return render(request, 'author_profile.html', context)
+
 def search(request):
     keyword = request.GET.get('keyword')
     
@@ -56,6 +82,7 @@ def search(request):
     }
     return render(request, 'search.html', context)
 
+@login_required(login_url='login')
 def react_post(request, post_id):
     post = Blog.objects.get(id=post_id)
     user = request.user
@@ -67,6 +94,7 @@ def react_post(request, post_id):
 
     return redirect('blogs', slug=post.slug)
 
+@login_required(login_url='login')
 def bookmark_post(request, post_id):
     post = Blog.objects.get(id=post_id)
     user = request.user
@@ -78,18 +106,74 @@ def bookmark_post(request, post_id):
 
     return redirect('blogs', slug=post.slug)
 
-def follow_user(request, user_id):
-    target = User.objects.get(id=user_id)
+def _follow_response(request, target):
+    payload = {
+        'is_following': Follow.objects.filter(follower=request.user, following=target).exists(),
+        'followers_count': target.followers.count(),
+        'following_count': target.following.count(),
+    }
 
-    obj, created = Follow.objects.get_or_create(
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return JsonResponse(payload)
+
+    return redirect('author_profile', username=target.username)
+
+
+@login_required(login_url='login')
+@require_POST
+def follow_user(request, user_id):
+    target = get_object_or_404(User, id=user_id)
+
+    if target == request.user:
+        return JsonResponse({'error': 'You cannot follow yourself.'}, status=400)
+
+    Follow.objects.get_or_create(
         follower=request.user,
         following=target
     )
 
-    if not created:
-        obj.delete()
+    return _follow_response(request, target)
 
-    return redirect('dashboard')
+
+@login_required(login_url='login')
+@require_POST
+def unfollow_user(request, user_id):
+    target = get_object_or_404(User, id=user_id)
+
+    Follow.objects.filter(
+        follower=request.user,
+        following=target
+    ).delete()
+
+    return _follow_response(request, target)
+
+
+@login_required(login_url='login')
+def author_followers(request, username):
+    author = get_object_or_404(User, username=username)
+    followers = author.followers.select_related('follower').order_by('-created_at')
+    following = author.following.select_related('following').order_by('-created_at')
+
+    return JsonResponse({
+        'followers_count': followers.count(),
+        'following_count': following.count(),
+        'followers': [
+            {
+                'id': item.follower.id,
+                'username': item.follower.username,
+                'name': item.follower.get_full_name(),
+            }
+            for item in followers
+        ],
+        'following': [
+            {
+                'id': item.following.id,
+                'username': item.following.username,
+                'name': item.following.get_full_name(),
+            }
+            for item in following
+        ],
+    })
 
 def post_detail(request, slug):
     post = Blog.objects.get(slug=slug)

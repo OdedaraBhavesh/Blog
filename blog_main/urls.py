@@ -25,6 +25,10 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('category/', include('blogs.urls')),
     path('blogs/<slug:slug>/', BlogsView.blogs, name='blogs'),
+    path('authors/<str:username>/', BlogsView.author_profile, name='author_profile'),
+    path('authors/<str:username>/followers/', BlogsView.author_followers, name='author_followers'),
+    path('follow/<int:user_id>/', BlogsView.follow_user, name='follow_user'),
+    path('unfollow/<int:user_id>/', BlogsView.unfollow_user, name='unfollow_user'),
     # Search endpoint
     path('search/', BlogsView.search, name='search'),
     path('register/', views.register, name='register'),
