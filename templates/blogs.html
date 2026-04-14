@@ -13,7 +13,10 @@
                     <!-- Post title-->
                     <h1 class="fw-bolder mb-1">{{ single_blog.title }}</h1>
                     <!-- Post meta content-->
-                    <div class="text-muted fst-italic mb-2">Posted on {{ single_blog.created_at }} by {{ single_blog.author }}</div>
+                    <div class="text-muted fst-italic mb-2">
+                        Posted on {{ single_blog.created_at }} by
+                        <a href="{% url 'author_profile' single_blog.author.username %}">{{ single_blog.author }}</a>
+                    </div>
                     <!-- Post category-->
                     <a class="badge bg-warning text-decoration-none text-light" href="#!">{{ single_blog.category }}</a>
                 </header>
@@ -32,12 +35,10 @@
                     <a href="{% url 'bookmark_post' single_blog.id %}" class="btn btn-primary">
                         📌 Bookmark
                     </a>
-                    <!-- Follow Button -->
-                    {% if user.is_authenticated and user != single_blog.author %}
-                        <a href="{% url 'follow_user' single_blog.author.id %}" class="btn btn-outline-primary">
-                            👤 Follow
-                        </a>
-                    {% endif %}
+                    <!-- Author Profile -->
+                    <a href="{% url 'author_profile' single_blog.author.username %}" class="btn btn-outline-secondary">
+                        View Author
+                    </a>
                     <!-- Comments -->
                     <h4>Comments ({{ comment_count }})</h4>
                     {% if comments %}

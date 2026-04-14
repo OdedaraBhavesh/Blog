@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="row mt-4">
+  <div class="col-md-4">
+    <div class="card border-0 bg-light">
+      <div class="card-body text-center">
+        {% if profile.profile_picture %}
+          <img src="{{ profile.profile_picture.url }}" class="rounded-circle mb-3" style="width: 140px; height: 140px; object-fit: cover;" alt="{{ author.username }}">
+        {% else %}
+          <div class="rounded-circle bg-warning text-white mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 140px; height: 140px; font-size: 48px;">
+            {{ author.username|first|upper }}
+          </div>
+        {% endif %}
+
+        <h2 class="mb-1">
+          {% if author.get_full_name %}
+            {{ author.get_full_name }}
+          {% else %}
+            {{ author.username }}
+          {% endif %}
+        </h2>
+        <p class="text-muted mb-3">@{{ author.username }}</p>
+
+        {% if profile.bio %}
+          <p>{{ profile.bio }}</p>
+        {% else %}
+          <p class="text-muted">This author has not added a bio yet.</p>
+        {% endif %}
+
+        <div class="d-flex justify-content-center mb-3">
+          <div class="px-3">
+            <strong id="followers-count">{{ followers_count }}</strong>
+            <div class="text-muted">Followers</div>
+          </div>
+          <div class="px-3">
+            <strong id="following-count">{{ following_count }}</strong>
+            <div class="text-muted">Following</div>
+          </div>
+        </div>
+
+        {% if user.is_authenticated and user != author %}
+          <form id="follow-form" method="POST" action="{% if is_following %}{% url 'unfollow_user' author.id %}{% else %}{% url 'follow_user' author.id %}{% endif %}">
+            {% csrf_token %}
+            <button
+              type="submit"
+              id="follow-button"
+              class="btn {% if is_following %}btn-outline-secondary{% else %}btn-warning{% endif %}"
+              data-follow-url="{% url 'follow_user' author.id %}"
+              data-unfollow-url="{% url 'unfollow_user' author.id %}"
+              data-is-following="{% if is_following %}true{% else %}false{% endif %}"
+            >
+              {% if is_following %}Unfollow{% else %}Follow{% endif %}
+            </button>
+          </form>
+        {% elif not user.is_authenticated %}
+          <a href="{% url 'login' %}" class="btn btn-warning">Login to follow</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <h3 class="text-uppercase text-warning" style="letter-spacing: 2px;">Posts by {{ author.username }}</h3>
+    {% if posts %}
+      {% for post in posts %}
+        <div class="card border-0 mb-3">
+          <div class="card-body">
+            <h3><a href="{% url 'blogs' post.slug %}" class="text-dark">{{ post.title }}</a></h3>
+            <small class="mb-1 text-muted">{{ post.created_at|timesince }} ago | {{ post.category }}</small>
+            <p class="card-text">{{ post.short_description|truncatewords:30 }}</p>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p>No published posts from this author yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  const followForm = document.getElementById('follow-form');
+
+  if (followForm) {
+    followForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+
+      const button = document.getElementById('follow-button');
+      const csrfToken = followForm.querySelector('[name=csrfmiddlewaretoken]').value;
+      const isFollowing = button.dataset.isFollowing === 'true';
+      const url = isFollowing ? button.dataset.unfollowUrl : button.dataset.followUrl;
+
+      button.disabled = true;
+
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          return;
+        }
+
+        document.getElementById('followers-count').textContent = data.followers_count;
+        document.getElementById('following-count').textContent = data.following_count;
+        button.dataset.isFollowing = data.is_following ? 'true' : 'false';
+        button.textContent = data.is_following ? 'Unfollow' : 'Follow';
+        button.classList.toggle('btn-warning', !data.is_following);
+        button.classList.toggle('btn-outline-secondary', data.is_following);
+        followForm.action = data.is_following ? button.dataset.unfollowUrl : button.dataset.followUrl;
+      })
+      .finally(() => {
+        button.disabled = false;
+      });
+    });
+  }
+</script>
+
+{% endblock %}

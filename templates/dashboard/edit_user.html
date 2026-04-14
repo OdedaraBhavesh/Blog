@@ -14,9 +14,11 @@
         {% if perms.auth.add_user %}
         <h2>Edit User</h2>
         
-        <form action="#" method="POST" >
+        <form action="#" method="POST" enctype="multipart/form-data">
             {% csrf_token %}
             {{ form | crispy }}
+            <h4 class="mt-4">Author Profile</h4>
+            {{ profile_form | crispy }}
             <button type="submit" class="btn btn-warning">Submit</button>
         </form>
         <br>
