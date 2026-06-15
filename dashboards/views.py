@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404, redirect, render
 
-from blogs.models import Blog, Category, UserProfile
+from blogs.models import Blog, Bookmark, Category, UserProfile
 from django.contrib.auth.decorators import login_required
 
 from .forms import AddUserForm, BlogPostForm, CategoryForm, EditUserForm, UserProfileForm
@@ -12,10 +12,12 @@ from django.contrib.auth.models import User
 def dashboard(request):
     category_count = Category.objects.all().count()
     blogs_count = Blog.objects.all().count()
+    bookmark_count = Bookmark.objects.all().count()
 
     context = {
         'category_count': category_count,
         'blogs_count': blogs_count,
+        'bookmark_count': bookmark_count,
     }
     return render(request, 'dashboard/dashboard.html', context)
 
@@ -108,6 +110,20 @@ def delete_post(request, pk):
     post = get_object_or_404(Blog, pk=pk)
     post.delete()
     return redirect('posts')
+
+
+@login_required(login_url='login')
+def bookmarks(request):
+    bookmarks = Bookmark.objects.select_related(
+        'user',
+        'post',
+        'post__author',
+        'post__category',
+    ).order_by('-created_at')
+    context = {
+        'bookmarks': bookmarks,
+    }
+    return render(request, 'dashboard/bookmarks.html', context)
 
 
 def users(request):

@@ -7,6 +7,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link rel="icon" type="image/png" href="{% static 'images/blogging.png' %}">
     <title>Blog Sphere</title>
     <link href="https://getbootstrap.com/docs/4.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css?family=Playfair+Display:700,900" rel="stylesheet">
@@ -33,6 +34,8 @@
             <a class="btn btn-sm btn-warning" href="{% url 'login' %}">Login</a> &nbsp;
             <a class="btn btn-sm btn-outline-secondary" href="{% url 'register' %}">Register</a>
             {% else %}
+            <!-- <span><a href="{% url 'my_bookmarks' %}">Saved Posts</a></span>
+            &emsp; -->
             <span><a href="{% url 'dashboard' %}">Dashboard</a></span>
             &emsp;
             
@@ -55,12 +58,15 @@
 
 {% endblock %}
 
-<!-- Footer Part -->
+<!-- Footer Part --><!-- Footer Part -->
+
 <footer class="blog-footer">
-    <p>Blog Sphere &copy; 2024. All rights reserved.</p>
+    <p>
+      <img src="{% static 'images/blogging.png' %}" alt="Blog Sphere" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 4px;">Blog Sphere &copy; 2026. Developed by Bhavesh and Mihir in guidance of Priti Tilwani.
+    </p>
     <p>
       <a href="#">Back to top</a>
     </p>
-  </footer>
+</footer>
   </body>
   </html>

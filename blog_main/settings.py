@@ -31,6 +31,8 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    # 'unfold',
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -122,7 +124,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR /'static'
+STATIC_ROOT = BASE_DIR / 'static'
 STATICFILES_DIRS = [
     'blog_main/static',
 ]
@@ -133,6 +135,6 @@ STATICFILES_DIRS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR /'media'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 CRISPY_TEMPLATE_PACK = 'bootstrap4'

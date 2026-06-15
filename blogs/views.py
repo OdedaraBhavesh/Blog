@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import Blog, Category, Comment, Reaction, Bookmark, Follow, UserProfile
 from django.db.models import Q
@@ -41,11 +42,16 @@ def blogs(request, slug):
     # Comments
     comments = Comment.objects.filter(blog=single_blog)
     comment_count = comments.count()
+    is_bookmarked = False
+
+    if request.user.is_authenticated:
+        is_bookmarked = Bookmark.objects.filter(user=request.user, post=single_blog).exists()
     
     context = {
         'single_blog': single_blog,
         'comments': comments,
         'comment_count': comment_count,
+        'is_bookmarked': is_bookmarked,
     }
     return render(request, 'blogs.html', context)
 
@@ -92,11 +98,15 @@ def react_post(request, post_id):
     if not created:
         obj.delete()
 
+    next_url = request.GET.get('next')
+    if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        return redirect(next_url)
+
     return redirect('blogs', slug=post.slug)
 
 @login_required(login_url='login')
 def bookmark_post(request, post_id):
-    post = Blog.objects.get(id=post_id)
+    post = get_object_or_404(Blog, id=post_id, status='Published')
     user = request.user
 
     obj, created = Bookmark.objects.get_or_create(user=user, post=post)
@@ -105,6 +115,20 @@ def bookmark_post(request, post_id):
         obj.delete()
 
     return redirect('blogs', slug=post.slug)
+
+
+@login_required(login_url='login')
+def my_bookmarks(request):
+    bookmarks = Bookmark.objects.filter(user=request.user).select_related(
+        'post',
+        'post__author',
+        'post__category',
+    ).order_by('-created_at')
+
+    context = {
+        'bookmarks': bookmarks,
+    }
+    return render(request, 'my_bookmarks.html', context)
 
 def _follow_response(request, target):
     payload = {
