@@ -28,8 +28,9 @@ def register(request):
     if request.method == 'POST':
         form = RegistrationForm(request.POST)
         if form.is_valid():
-            form.save()
-            return redirect('register')
+            user = form.save()
+            auth.login(request, user)
+            return redirect('home')
         else:
             print(form.errors)
     else:
@@ -50,7 +51,9 @@ def login(request):
             user = auth.authenticate(username=username, password=password)
             if user is not None:
                 auth.login(request, user)
-            return redirect('dashboard')
+                if user.is_staff or user.is_superuser:
+                    return redirect('dashboard')
+            return redirect('home')
     form = AuthenticationForm()
     context = {
         'form': form,

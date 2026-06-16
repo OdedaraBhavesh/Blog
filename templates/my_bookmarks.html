@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h3 class="text-uppercase text-warning" style="letter-spacing: 2px;">My Saved Posts</h3>
+
+<div class="row mb-2">
+  {% if bookmarks %}
+    {% for bookmark in bookmarks %}
+    <div class="col-md-6">
+      <div class="card border-0">
+        <div class="card-body">
+          <h3><a href="{% url 'blogs' bookmark.post.slug %}" class="text-dark">{{ bookmark.post.title }}</a></h3>
+          <small class="mb-1 text-muted">
+            Saved {{ bookmark.created_at|timesince }} ago |
+            {{ bookmark.post.category }} |
+            <a href="{% url 'author_profile' bookmark.post.author.username %}">{{ bookmark.post.author }}</a>
+          </small>
+          <p class="card-text">{{ bookmark.post.short_description|truncatewords:25 }}</p>
+          <a href="{% url 'bookmark_post' bookmark.post.id %}?next={{ request.path|urlencode }}" class="btn btn-sm btn-outline-danger">Remove Bookmark</a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p>You have not saved any posts yet.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
