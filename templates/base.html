@@ -31,11 +31,21 @@
           </div>
           <div class="col-4 d-flex justify-content-end align-items-center">
             {% if not user.is_authenticated %}
+            <span><a href="{% url 'home' %}">Home</a></span>
+            &emsp;
+            <span><a href="{% url 'blogger_directory' %}">Bloggers</a></span>
+            &emsp;
             <a class="btn btn-sm btn-warning" href="{% url 'login' %}">Login</a> &nbsp;
             <a class="btn btn-sm btn-outline-secondary" href="{% url 'register' %}">Register</a>
             {% else %}
             <!-- <span><a href="{% url 'my_bookmarks' %}">Saved Posts</a></span>
             &emsp; -->
+            <span><a href="{% url 'home' %}">Home</a></span>
+            &emsp;
+            <span><a href="{% url 'blogger_directory' %}">Bloggers</a></span>
+            &emsp;
+            <span><a href="{% url 'author_profile' user.username %}">Profile</a></span>
+            &emsp;
             <span><a href="{% url 'dashboard' %}">Dashboard</a></span>
             &emsp;
             
@@ -45,13 +55,15 @@
         </div>
       </header>
 
-      <div class="nav-scroller py-1 mb-2">
-        <nav class="nav d-flex justify-content-between">
-          {% for cat in categories %}
-          <a class="p-2 text-muted" href="{% url 'posts_by_category' cat.id %}">{{ cat.category_name }}</a>
-          {% endfor %}
-        </nav>
-      </div>
+      {% if '/dashboard/' not in request.path %}
+        <div class="nav-scroller py-1 mb-2">
+          <nav class="nav d-flex justify-content-between">
+            {% for cat in categories %}
+            <a class="p-2 text-muted" href="{% url 'posts_by_category' cat.id %}">{{ cat.category_name }}</a>
+            {% endfor %}
+          </nav>
+        </div>
+      {% endif %}
 
 <!-- Main Content Part -->
 {% block content %}

@@ -6,12 +6,11 @@
     {% include 'dashboard/sidebar.html' %}
 
     <div class="col-md-9">
-        <h2>All Bookmarks</h2>
+        <h2>My Bookmarks</h2>
         <table class="table table-hover">
             <thead>
               <tr>
                 <th>#</th>
-                <th>User</th>
                 <th>Post</th>
                 <th>Author</th>
                 <th>Category</th>
@@ -22,7 +21,6 @@
             {% for bookmark in bookmarks %}
               <tr>
                 <td>{{ forloop.counter }}</td>
-                <td>{{ bookmark.user.username }}</td>
                 <td><a href="{% url 'blogs' bookmark.post.slug %}">{{ bookmark.post.title }}</a></td>
                 <td>{{ bookmark.post.author }}</td>
                 <td>{{ bookmark.post.category }}</td>
@@ -30,7 +28,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="6">No bookmarks found.</td>
+                <td colspan="5">No bookmarks found.</td>
               </tr>
             {% endfor %}
             </tbody>

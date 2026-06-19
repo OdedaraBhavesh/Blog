@@ -1,30 +1,43 @@
+from django.template.defaultfilters import slugify
+from .forms import AddUserForm, BlogPostForm, CategoryForm, EditUserForm, UserProfileForm
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import permission_required
+from blogs.models import Blog, Bookmark, Category, UserProfile
+from blogs.moderation import check_blog_content
+from django.utils import timezone
 from django.shortcuts import get_object_or_404, redirect, render
 
-from blogs.models import Blog, Bookmark, Category, UserProfile
-from django.contrib.auth.decorators import login_required
+import logging
 
-from .forms import AddUserForm, BlogPostForm, CategoryForm, EditUserForm, UserProfileForm
-from django.template.defaultfilters import slugify
+
 from django.contrib.auth.models import User
+
+from blogs.moderation import check_blog_content
+
+logger = logging.getLogger(__name__)
 
 
 @login_required(login_url='login')
 def dashboard(request):
-    category_count = Category.objects.all().count()
-    blogs_count = Blog.objects.all().count()
-    bookmark_count = Bookmark.objects.all().count()
+    blogs_count = Blog.objects.filter(author=request.user).count()
+    bookmark_count = Bookmark.objects.filter(user=request.user).count()
 
     context = {
-        'category_count': category_count,
         'blogs_count': blogs_count,
         'bookmark_count': bookmark_count,
     }
     return render(request, 'dashboard/dashboard.html', context)
 
+
+@login_required(login_url='login')
+@permission_required('blogs.view_category', raise_exception=True)
 def categories(request):
-    return render(request, 'dashboard/categories.html')
+    categories = Category.objects.all().order_by('category_name')
+    return render(request, 'dashboard/categories.html', {'categories': categories})
 
 
+@login_required(login_url='login')
+@permission_required('blogs.add_category', raise_exception=True)
 def add_category(request):
     if request.method == 'POST':
         form = CategoryForm(request.POST)
@@ -38,6 +51,8 @@ def add_category(request):
     return render(request, 'dashboard/add_category.html', context)
 
 
+@login_required(login_url='login')
+@permission_required('blogs.change_category', raise_exception=True)
 def edit_category(request, pk):
     category = get_object_or_404(Category, pk=pk)
     if request.method == 'POST':
@@ -53,29 +68,55 @@ def edit_category(request, pk):
     return render(request, 'dashboard/edit_category.html', context)
 
 
+@login_required(login_url='login')
+@permission_required('blogs.delete_category', raise_exception=True)
 def delete_category(request, pk):
     category = get_object_or_404(Category, pk=pk)
     category.delete()
     return redirect('categories')
 
 
+@login_required(login_url='login')
 def posts(request):
-    posts = Blog.objects.all()
+    posts = Blog.objects.filter(author=request.user).select_related(
+        'category',
+        'author',
+    ).order_by('-created_at')
     context = {
         'posts': posts,
     }
     return render(request, 'dashboard/posts.html', context)
 
 
+@login_required(login_url='login')
 def add_post(request):
     if request.method == 'POST':
         form = BlogPostForm(request.POST, request.FILES)
         if form.is_valid():
-            post = form.save(commit=False) # temporarily saving the form
+            post = form.save(commit=False)  # temporarily saving the form
             post.author = request.user
             post.save()
             title = form.cleaned_data['title']
-            post.slug = slugify(title) + '-'+str(post.id)
+            post.slug = slugify(title) + '-' + str(post.id)
+
+            # --- AI moderation check runs here, every single submission ---
+            logger.info(
+                "Running AI moderation check for post id=%s title=%r", post.id, post.title)
+            result = check_blog_content(
+                post.title, post.short_description, post.blog_body)
+            logger.info("AI moderation result for post id=%s: %s",
+                        post.id, result)
+
+            post.ai_verdict = result['verdict']
+            post.ai_reason = result.get('reason', '')
+            post.ai_checked_at = timezone.now()
+
+            if result['verdict'] == 'approved':
+                post.status = 'Published'
+            else:
+                post.status = 'Pending Review'
+            # --- end AI moderation block ---
+
             post.save()
             return redirect('posts')
         else:
@@ -88,8 +129,9 @@ def add_post(request):
     return render(request, 'dashboard/add_post.html', context)
 
 
+@login_required(login_url='login')
 def edit_post(request, pk):
-    post = get_object_or_404(Blog, pk=pk)
+    post = get_object_or_404(Blog, pk=pk, author=request.user)
     if request.method == 'POST':
         form = BlogPostForm(request.POST, request.FILES, instance=post)
         if form.is_valid():
@@ -106,15 +148,16 @@ def edit_post(request, pk):
     return render(request, 'dashboard/edit_post.html', context)
 
 
+@login_required(login_url='login')
 def delete_post(request, pk):
-    post = get_object_or_404(Blog, pk=pk)
+    post = get_object_or_404(Blog, pk=pk, author=request.user)
     post.delete()
     return redirect('posts')
 
 
 @login_required(login_url='login')
 def bookmarks(request):
-    bookmarks = Bookmark.objects.select_related(
+    bookmarks = Bookmark.objects.filter(user=request.user).select_related(
         'user',
         'post',
         'post__author',
@@ -154,7 +197,8 @@ def edit_user(request, pk):
     profile, created = UserProfile.objects.get_or_create(user=user)
     if request.method == 'POST':
         form = EditUserForm(request.POST, instance=user)
-        profile_form = UserProfileForm(request.POST, request.FILES, instance=profile)
+        profile_form = UserProfileForm(
+            request.POST, request.FILES, instance=profile)
         if form.is_valid() and profile_form.is_valid():
             form.save()
             profile_form.save()

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+  <h2 class="mb-0">Explore Bloggers</h2>
+</div>
+
+<div class="row">
+  {% for card in blogger_cards %}
+    <div class="col-md-4 mb-4">
+      <div class="card border-0 bg-light h-100">
+        <div class="card-body text-center">
+          <a href="{% url 'author_profile' card.user.username %}" class="text-dark">
+            {% if card.profile.profile_picture %}
+              <img src="{{ card.profile.profile_picture.url }}" class="rounded-circle mb-3" style="width: 96px; height: 96px; object-fit: cover;" alt="{{ card.user.username }}">
+            {% else %}
+              <div class="rounded-circle bg-warning text-white mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 96px; height: 96px; font-size: 36px;">
+                {{ card.user.username|first|upper }}
+              </div>
+            {% endif %}
+          </a>
+
+          <h4 class="mb-1">
+            <a href="{% url 'author_profile' card.user.username %}" class="text-dark">
+              {% if card.user.get_full_name %}
+                {{ card.user.get_full_name }}
+              {% else %}
+                {{ card.user.username }}
+              {% endif %}
+            </a>
+          </h4>
+          <p class="text-muted mb-2">@{{ card.user.username }}</p>
+
+          <span class="badge {% if card.profile.is_private %}badge-secondary{% else %}badge-warning{% endif %} mb-3">
+            {% if card.profile.is_private %}Private{% else %}Public{% endif %}
+          </span>
+
+          {% if card.profile.bio %}
+            <p class="card-text">{{ card.profile.bio|truncatewords:20 }}</p>
+          {% else %}
+            <p class="card-text text-muted">No bio added yet.</p>
+          {% endif %}
+
+          {% if user.is_authenticated %}
+            {% if user == card.user %}
+              <a href="{% url 'author_profile' user.username %}" class="btn btn-sm btn-outline-secondary">Edit Profile</a>
+            {% elif card.follow_status == 'accepted' %}
+              <form method="POST" action="{% url 'unfollow_user' card.user.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Unfollow</button>
+              </form>
+            {% elif card.follow_status == 'pending' %}
+              <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Requested</button>
+            {% else %}
+              <form method="POST" action="{% url 'follow_user' card.user.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-warning">Follow</button>
+              </form>
+            {% endif %}
+          {% else %}
+            <a href="{% url 'login' %}" class="btn btn-sm btn-warning">Login to Follow</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <div class="col-12">
+      <p>No bloggers found.</p>
+    </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
