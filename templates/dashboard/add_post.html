@@ -5,16 +5,15 @@
 {% load crispy_forms_tags %}
 
 <div class="row">
-    <!-- Left sidebar -->
-    <!-- load the sidebar here -->
     {% include 'dashboard/sidebar.html' %}
 
-    <!-- Right side content -->
     <div class="col-md-9">
         <h2>Add New Post</h2>
-        
+        <small id="draft-save-status" class="text-muted d-block mb-2"></small>
+
         <form action="{% url 'add_post' %}" method="POST" enctype="multipart/form-data">
             {% csrf_token %}
+            <input type="hidden" name="draft_post_id" id="draft-post-id-field" value="">
             {{ form | crispy }}
             <button type="submit" class="btn btn-warning">Submit</button>
         </form>
@@ -22,4 +21,113 @@
     </div>
 </div>
 
+<script>
+(function () {
+  const titleInput = document.getElementById('id_title');
+  const bodyInput = document.getElementById('id_blog_body');
+  const descInput = document.getElementById('id_short_description');
+  const categorySelect = document.getElementById('id_category');
+  const statusEl = document.getElementById('draft-save-status');
+  const hiddenDraftField = document.getElementById('draft-post-id-field');
+  const form = document.querySelector('form');
+
+  if (!titleInput || !bodyInput) return;
+
+  const DRAFT_URL = '{% url "api_save_draft" %}';
+  const DEBOUNCE_MS = 3000;
+
+  // Always blank — a fresh "Add New Post" page is always a NEW draft.
+  let draftId = '';
+  let debounceTimer = null;
+  let isDirty = false;
+
+  function getCsrfToken() {
+    const match = document.cookie.match(/csrftoken=([^;]+)/);
+    return match ? match[1] : '';
+  }
+
+  function buildFormData() {
+    const data = new FormData();
+    data.append('csrfmiddlewaretoken', getCsrfToken());
+    if (draftId) data.append('post_id', draftId);
+    data.append('title', titleInput.value);
+    data.append('blog_body', bodyInput.value);
+    if (descInput) data.append('short_description', descInput.value);
+    if (categorySelect && categorySelect.value) data.append('category', categorySelect.value);
+    return data;
+  }
+
+  function setStatus(text) {
+    if (statusEl) statusEl.textContent = text;
+  }
+
+  function saveDraft(useBeacon) {
+    if (!titleInput.value.trim() && !bodyInput.value.trim()) return;
+    const data = buildFormData();
+
+    if (useBeacon && navigator.sendBeacon) {
+      navigator.sendBeacon(DRAFT_URL, data);
+      isDirty = false;
+      return;
+    }
+
+    setStatus('Saving draft...');
+    fetch(DRAFT_URL, { method: 'POST', body: data, credentials: 'same-origin' })
+      .then((res) => res.json())
+      .then((result) => {
+        if (result.id) {
+          draftId = String(result.id);
+          if (hiddenDraftField) hiddenDraftField.value = draftId;
+        }
+        isDirty = false;
+        setStatus('Draft saved');
+      })
+      .catch(() => setStatus('Could not save draft'));
+  }
+
+  function scheduleSave() {
+    isDirty = true;
+    setStatus('Unsaved changes...');
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => saveDraft(false), DEBOUNCE_MS);
+  }
+
+  [titleInput, bodyInput, descInput].forEach((el) => {
+    if (el) el.addEventListener('input', scheduleSave);
+  });
+  if (categorySelect) categorySelect.addEventListener('change', scheduleSave);
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden' && isDirty) {
+      clearTimeout(debounceTimer);
+      saveDraft(true);
+    }
+  });
+
+  window.addEventListener('pagehide', function () {
+    if (isDirty) {
+      clearTimeout(debounceTimer);
+      saveDraft(true);
+    }
+  });
+
+  document.addEventListener('click', function (event) {
+    const link = event.target.closest('a[href]');
+    if (!link || !isDirty) return;
+    const isInternal = link.host === window.location.host && !link.target;
+    if (isInternal) {
+      event.preventDefault();
+      clearTimeout(debounceTimer);
+      saveDraft(false);
+      setTimeout(() => { window.location.href = link.href; }, 150);
+    }
+  });
+
+  if (form) {
+    form.addEventListener('submit', function () {
+      if (hiddenDraftField) hiddenDraftField.value = draftId;
+    });
+  }
+})();
+</script>
 {% endblock %}

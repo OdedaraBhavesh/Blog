@@ -10,7 +10,7 @@
 
     <!-- Right side content -->
     <div class="col-md-9">
-        <h2>All Posts</h2>
+        <h2>My Posts</h2>
         <a href="{% url 'add_post' %}" class="btn btn-dark text-light float-right mb-2">Add New</a>
         <table class="table table-hover">
             <thead>
@@ -18,8 +18,8 @@
                 <th>#</th>
                 <th>Title</th>
                 <th>Category</th>
-                <th>Author</th>
                 <th>Status</th>
+                <th>Content Quality</th>
                 <th>Featured</th>
                 <th>Action</th>
               </tr>
@@ -30,14 +30,33 @@
                 <td>{{ forloop.counter }}</td>
                 <td>{{ post.title }}</td>
                 <td>{{ post.category }}</td>
-                <td>{{ post.author }}</td>
                 <td>{{ post.status }}</td>
+                <td>
+                  {% if post.content_analysis %}
+                    {% if post.content_analysis.overall_score is not None %}
+                      <span class="badge {% if post.content_analysis.has_quality_warning %}badge-warning{% else %}badge-success{% endif %}">
+                        {{ post.content_analysis.overall_score }}/100
+                      </span>
+                    {% else %}
+                      <span class="badge badge-secondary">{{ post.content_analysis.get_status_display }}</span>
+                    {% endif %}
+                    {% if post.content_analysis.has_quality_warning %}
+                      <small class="d-block text-warning">Needs improvement</small>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted">Not analyzed</span>
+                  {% endif %}
+                </td>
                 <td>{% if post.is_featured %}<i class="fa fa-check text-success"></i>{% else %}<i class="fa fa-times text-danger"></i>{% endif %}</td>
                 <td>
                     <a href="{% url 'edit_post' post.id %}"><i class="fa fa-edit text-success"></i></a>
                     &nbsp;
                     <a href="{% url 'delete_post' post.id %}"><i class="fa fa-trash text-danger"></i></a>
                 </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="7">No posts found.</td>
               </tr>
             {% endfor %}
               

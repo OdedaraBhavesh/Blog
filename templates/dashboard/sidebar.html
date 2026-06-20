@@ -4,9 +4,15 @@
         {% if perms.auth.view_user %}
         <a href="{% url 'users' %}" class="nav-link text-dark {% if '/users/' in request.path %}bg-warning{% endif %}">Users</a>
         {% endif %}
+        {% if perms.blogs.view_category %}
         <a href="{% url 'categories' %}" class="nav-link text-dark {% if '/categories/' in request.path %}bg-warning{% endif %}">Categories</a>
+        {% endif %}
         <a href="{% url 'posts' %}" class="nav-link text-dark {% if '/posts/' in request.path %}bg-warning{% endif %}">Posts</a>
         <a href="{% url 'dashboard_bookmarks' %}" class="nav-link text-dark {% if '/bookmarks/' in request.path %}bg-warning{% endif %}">Bookmarks</a>
-        <a href="" class="nav-link text-dark">Logout</a>
+        <a href="{% url 'notifications' %}" class="nav-link text-dark {% if '/notifications/' in request.path %}bg-warning{% endif %}">
+            Notifications
+            {% if unread_notification_count %}<span class="badge badge-danger">{{ unread_notification_count }}</span>{% endif %}
+        </a>
+        <a href="{% url 'logout' %}" class="nav-link text-dark">Logout</a>
     </div>
 </div>

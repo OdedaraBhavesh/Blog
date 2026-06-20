@@ -21,7 +21,14 @@
             {{ author.username }}
           {% endif %}
         </h2>
-        <p class="text-muted mb-3">@{{ author.username }}</p>
+        <p class="text-muted mb-1">@{{ author.username }}</p>
+        <p class="text-muted mb-3">
+          {% if profile.is_private %}
+            Private account
+          {% else %}
+            Public account
+          {% endif %}
+        </p>
 
         {% if profile.bio %}
           <p>{{ profile.bio }}</p>
@@ -30,28 +37,50 @@
         {% endif %}
 
         <div class="d-flex justify-content-center mb-3">
-          <div class="px-3">
+          <button
+            type="button"
+            class="btn btn-link text-dark px-3 follow-list-trigger"
+            data-list-type="followers"
+            data-url="{% url 'api_user_followers' author.id %}"
+            {% if not can_view_posts %}disabled{% endif %}
+          >
             <strong id="followers-count">{{ followers_count }}</strong>
-            <div class="text-muted">Followers</div>
-          </div>
-          <div class="px-3">
+            <span class="text-muted">Followers</span>
+          </button>
+          <button
+            type="button"
+            class="btn btn-link text-dark px-3 follow-list-trigger"
+            data-list-type="following"
+            data-url="{% url 'api_user_following' author.id %}"
+            {% if not can_view_posts %}disabled{% endif %}
+          >
             <strong id="following-count">{{ following_count }}</strong>
-            <div class="text-muted">Following</div>
-          </div>
+            <span class="text-muted">Following</span>
+          </button>
         </div>
 
-        {% if user.is_authenticated and user != author %}
-          <form id="follow-form" method="POST" action="{% if is_following %}{% url 'unfollow_user' author.id %}{% else %}{% url 'follow_user' author.id %}{% endif %}">
+        {% if user.is_authenticated and user == author %}
+          <form method="POST" action="{% url 'update_profile_privacy' %}" class="mt-3">
+            {% csrf_token %}
+            <div class="custom-control custom-switch d-inline-block text-left">
+              <input type="checkbox" class="custom-control-input" id="is-private-account" name="is_private" {% if profile.is_private %}checked{% endif %}>
+              <label class="custom-control-label" for="is-private-account">Private account</label>
+            </div>
+            <button type="submit" class="btn btn-sm btn-warning ml-2">Save</button>
+          </form>
+        {% elif user.is_authenticated %}
+          <form id="follow-form" method="POST" action="{% if is_following or has_pending_request %}{% url 'unfollow_user' author.id %}{% else %}{% url 'follow_user' author.id %}{% endif %}">
             {% csrf_token %}
             <button
               type="submit"
               id="follow-button"
-              class="btn {% if is_following %}btn-outline-secondary{% else %}btn-warning{% endif %}"
+              class="btn {% if is_following or has_pending_request %}btn-outline-secondary{% else %}btn-warning{% endif %}"
               data-follow-url="{% url 'follow_user' author.id %}"
               data-unfollow-url="{% url 'unfollow_user' author.id %}"
               data-is-following="{% if is_following %}true{% else %}false{% endif %}"
+              data-has-pending-request="{% if has_pending_request %}true{% else %}false{% endif %}"
             >
-              {% if is_following %}Unfollow{% else %}Follow{% endif %}
+              {% if is_following %}Unfollow{% elif has_pending_request %}Requested{% else %}Follow{% endif %}
             </button>
           </form>
         {% elif not user.is_authenticated %}
@@ -62,8 +91,48 @@
   </div>
 
   <div class="col-md-8">
+    {% if user.is_authenticated and user == author %}
+      <div class="card border-0 bg-light mb-4">
+        <div class="card-body">
+          <h4>Follow Requests</h4>
+          {% if pending_follow_requests %}
+            {% for follow_request in pending_follow_requests %}
+              <div class="d-flex justify-content-between align-items-center border-top py-2">
+                <div>
+                  <strong>{{ follow_request.follower.username }}</strong>
+                  <div class="text-muted small">{{ follow_request.created_at|timesince }} ago</div>
+                </div>
+                <div>
+                  <form method="POST" action="{% url 'respond_follow_request' follow_request.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="accept">
+                    <button type="submit" class="btn btn-sm btn-warning">Accept</button>
+                  </form>
+                  <form method="POST" action="{% url 'respond_follow_request' follow_request.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="decline">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Decline</button>
+                  </form>
+                </div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <p class="mb-0 text-muted">No pending follow requests.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
     <h3 class="text-uppercase text-warning" style="letter-spacing: 2px;">Posts by {{ author.username }}</h3>
-    {% if posts %}
+    {% if not can_view_posts %}
+      <div class="card border-0 bg-light">
+        <div class="card-body text-center py-5">
+          <i class="fa fa-lock text-warning mb-3" style="font-size: 48px;"></i>
+          <h4>This account is private.</h4>
+          <p class="mb-0 text-muted">Follow this user to see their blog posts.</p>
+        </div>
+      </div>
+    {% elif posts %}
       {% for post in posts %}
         <div class="card border-0 mb-3">
           <div class="card-body">
@@ -79,6 +148,66 @@
   </div>
 </div>
 
+<div id="follow-list-modal" class="follow-list-modal" aria-hidden="true">
+  <div class="follow-list-backdrop" data-close-modal="true"></div>
+  <div class="follow-list-dialog" role="dialog" aria-modal="true" aria-labelledby="follow-list-title">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 id="follow-list-title" class="mb-0">Connections</h4>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="follow-list-close">Close</button>
+    </div>
+
+    <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Followers and following tabs">
+      <button type="button" class="btn btn-warning follow-list-tab" data-list-type="followers" data-url="{% url 'api_user_followers' author.id %}">Followers</button>
+      <button type="button" class="btn btn-outline-secondary follow-list-tab" data-list-type="following" data-url="{% url 'api_user_following' author.id %}">Following</button>
+    </div>
+
+    <div id="follow-list-status" class="text-muted mb-2"></div>
+    <div id="follow-list-content"></div>
+  </div>
+</div>
+
+<style>
+  .follow-list-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+  }
+
+  .follow-list-modal.is-open {
+    display: block;
+  }
+
+  .follow-list-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .follow-list-dialog {
+    position: relative;
+    width: min(92vw, 440px);
+    max-height: 80vh;
+    overflow-y: auto;
+    margin: 8vh auto;
+    background: #fff;
+    border-radius: 6px;
+    padding: 20px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.24);
+  }
+
+  .follow-list-avatar {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+  }
+
+  .follow-list-initial {
+    width: 44px;
+    height: 44px;
+  }
+</style>
+
 <script>
   const followForm = document.getElementById('follow-form');
 
@@ -89,7 +218,8 @@
       const button = document.getElementById('follow-button');
       const csrfToken = followForm.querySelector('[name=csrfmiddlewaretoken]').value;
       const isFollowing = button.dataset.isFollowing === 'true';
-      const url = isFollowing ? button.dataset.unfollowUrl : button.dataset.followUrl;
+      const hasPendingRequest = button.dataset.hasPendingRequest === 'true';
+      const url = (isFollowing || hasPendingRequest) ? button.dataset.unfollowUrl : button.dataset.followUrl;
 
       button.disabled = true;
 
@@ -106,19 +236,127 @@
           return;
         }
 
-        document.getElementById('followers-count').textContent = data.followers_count;
-        document.getElementById('following-count').textContent = data.following_count;
+        const followersCount = document.getElementById('followers-count');
+        const followingCount = document.getElementById('following-count');
+
+        if (followersCount) {
+          followersCount.textContent = data.followers_count;
+        }
+        if (followingCount) {
+          followingCount.textContent = data.following_count;
+        }
         button.dataset.isFollowing = data.is_following ? 'true' : 'false';
-        button.textContent = data.is_following ? 'Unfollow' : 'Follow';
-        button.classList.toggle('btn-warning', !data.is_following);
-        button.classList.toggle('btn-outline-secondary', data.is_following);
-        followForm.action = data.is_following ? button.dataset.unfollowUrl : button.dataset.followUrl;
+        button.dataset.hasPendingRequest = data.has_pending_request ? 'true' : 'false';
+
+        if (data.is_following) {
+          button.textContent = 'Unfollow';
+          followForm.action = button.dataset.unfollowUrl;
+        } else if (data.has_pending_request) {
+          button.textContent = 'Requested';
+          followForm.action = button.dataset.unfollowUrl;
+        } else {
+          button.textContent = 'Follow';
+          followForm.action = button.dataset.followUrl;
+        }
+
+        button.classList.toggle('btn-warning', !data.is_following && !data.has_pending_request);
+        button.classList.toggle('btn-outline-secondary', data.is_following || data.has_pending_request);
       })
       .finally(() => {
         button.disabled = false;
       });
     });
   }
+
+  const followListModal = document.getElementById('follow-list-modal');
+  const followListTitle = document.getElementById('follow-list-title');
+  const followListStatus = document.getElementById('follow-list-status');
+  const followListContent = document.getElementById('follow-list-content');
+  const followListClose = document.getElementById('follow-list-close');
+  const followListTabs = document.querySelectorAll('.follow-list-tab');
+
+  function setActiveFollowTab(listType) {
+    followListTabs.forEach((tab) => {
+      const isActive = tab.dataset.listType === listType;
+      tab.classList.toggle('btn-warning', isActive);
+      tab.classList.toggle('btn-outline-secondary', !isActive);
+    });
+  }
+
+  function renderFollowUsers(users) {
+    if (!users.length) {
+      followListContent.innerHTML = '<p class="text-muted mb-0">No users found.</p>';
+      return;
+    }
+
+    followListContent.innerHTML = users.map((item) => {
+      const avatar = item.avatar_url
+        ? `<img src="${item.avatar_url}" class="rounded-circle follow-list-avatar mr-3" alt="${item.name}">`
+        : `<div class="rounded-circle bg-warning text-white d-flex align-items-center justify-content-center follow-list-initial mr-3">${item.name.charAt(0).toUpperCase()}</div>`;
+
+      return `
+        <a href="${item.profile_url}" class="d-flex align-items-center text-dark border-top py-2">
+          ${avatar}
+          <span>${item.name}</span>
+        </a>
+      `;
+    }).join('');
+  }
+
+  function loadFollowList(listType, url) {
+    followListTitle.textContent = listType === 'followers' ? 'Followers' : 'Following';
+    followListStatus.textContent = 'Loading...';
+    followListContent.innerHTML = '';
+    setActiveFollowTab(listType);
+
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Unable to load this list.');
+        }
+        return response.json();
+      })
+      .then((data) => {
+        followListStatus.textContent = '';
+        renderFollowUsers(data.users || []);
+      })
+      .catch((error) => {
+        followListStatus.textContent = error.message;
+      });
+  }
+
+  function openFollowListModal(listType, url) {
+    followListModal.classList.add('is-open');
+    followListModal.setAttribute('aria-hidden', 'false');
+    loadFollowList(listType, url);
+  }
+
+  function closeFollowListModal() {
+    followListModal.classList.remove('is-open');
+    followListModal.setAttribute('aria-hidden', 'true');
+  }
+
+  document.querySelectorAll('.follow-list-trigger').forEach((button) => {
+    button.addEventListener('click', function () {
+      if (button.disabled) {
+        return;
+      }
+      openFollowListModal(button.dataset.listType, button.dataset.url);
+    });
+  });
+
+  followListTabs.forEach((tab) => {
+    tab.addEventListener('click', function () {
+      loadFollowList(tab.dataset.listType, tab.dataset.url);
+    });
+  });
+
+  followListClose.addEventListener('click', closeFollowListModal);
+  followListModal.addEventListener('click', function (event) {
+    if (event.target.dataset.closeModal) {
+      closeFollowListModal();
+    }
+  });
 </script>
 
 {% endblock %}
