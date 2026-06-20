@@ -67,3 +67,35 @@ h1, h2, h3, h4, h5, h6 {
 .blog-footer p:last-child {
   margin-bottom: 0;
 }
+
+/* Notification bell uses native details/summary, so it needs no JS plugin. */
+.notification-menu {
+  position: relative;
+}
+
+.notification-menu summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.notification-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.notification-dropdown {
+  background: #fff;
+  min-width: 320px;
+  position: absolute;
+  right: 0;
+  top: 1.75rem;
+  z-index: 1000;
+}
+
+.notification-dropdown a {
+  color: #343a40;
+}
+
+.notification-unread {
+  background-color: #fff8dc;
+  font-weight: 600;
+}

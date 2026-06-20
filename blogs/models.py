@@ -40,11 +40,17 @@ class Tag(models.Model):
 class Blog(models.Model):
     title = models.CharField(max_length=100)
     slug = models.SlugField(max_length=150, unique=True, blank=True)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    # category & featured_image are now optional at the DB level so a partial
+    # autosave (title/body only) can be stored as a Draft. Required-ness for
+    # an actual Publish submission is enforced in dashboards/forms.py instead.
+    category = models.ForeignKey(
+        Category, on_delete=models.CASCADE, null=True, blank=True)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
-    featured_image = models.ImageField(upload_to='uploads/%Y/%m/%d')
-    short_description = models.TextField(max_length=500)
-    blog_body = models.TextField(max_length=2000)
+    featured_image = models.ImageField(
+        upload_to='uploads/%Y/%m/%d', null=True, blank=True)
+    short_description = models.TextField(
+        max_length=500, blank=True, default='')
+    blog_body = models.TextField(max_length=2000, blank=True, default='')
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="Draft")
     is_featured = models.BooleanField(default=False)
@@ -67,6 +73,94 @@ class Blog(models.Model):
     def save(self, *args, **kwargs):
         self.reading_time = len(self.blog_body.split()) // 200
         super().save(*args, **kwargs)
+
+
+ANALYSIS_STATUS_CHOICES = (
+    ('success', 'Success'),
+    ('partial', 'Partial'),
+    ('failed', 'Failed'),
+    ('unavailable', 'Unavailable'),
+)
+
+
+class BlogContentAnalysis(models.Model):
+    """Latest editorial analysis for a blog post.
+
+    Safety moderation remains on Blog itself. This model stores writing-quality
+    feedback and an experimental AI-generated likelihood for the author.
+    """
+
+    blog = models.OneToOneField(
+        Blog, related_name='content_analysis', on_delete=models.CASCADE)
+    status = models.CharField(
+        max_length=20, choices=ANALYSIS_STATUS_CHOICES, default='unavailable')
+    grammar_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    vocabulary_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    grammar_errors = models.JSONField(default=list, blank=True)
+    spelling_errors = models.JSONField(default=list, blank=True)
+    suggestions = models.JSONField(default=list, blank=True)
+    summary = models.TextField(blank=True)
+    ai_generated_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True)
+    content_hash = models.CharField(max_length=64, blank=True)
+    quality_model = models.CharField(max_length=150, blank=True)
+    detector_model = models.CharField(max_length=150, blank=True)
+    error_message = models.TextField(blank=True)
+    analyzed_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = 'blog content analyses'
+
+    @property
+    def overall_score(self):
+        scores = [
+            score for score in (self.grammar_score, self.vocabulary_score)
+            if score is not None
+        ]
+        return round(sum(scores) / len(scores)) if scores else None
+
+    @property
+    def has_quality_warning(self):
+        available_scores = (
+            self.grammar_score is not None and self.grammar_score < 60,
+            self.vocabulary_score is not None and self.vocabulary_score < 60,
+        )
+        return any(available_scores) or bool(
+            self.grammar_errors or self.spelling_errors)
+
+    def __str__(self):
+        return f'Analysis for {self.blog.title} ({self.status})'
+
+
+NOTIFICATION_TYPES = (
+    ("post_submitted", "Post submitted"),
+    ("status_changed", "Post status changed"),
+)
+
+
+class Notification(models.Model):
+    """A database-backed notification for one user and one blog post."""
+
+    recipient = models.ForeignKey(
+        User, related_name='notifications', on_delete=models.CASCADE)
+    blog = models.ForeignKey(
+        Blog, related_name='notifications', on_delete=models.CASCADE)
+    notification_type = models.CharField(
+        max_length=30, choices=NOTIFICATION_TYPES)
+    message = models.CharField(max_length=255)
+    # Keep the status at the time of the event so notification history remains
+    # meaningful even if an admin changes the post again later.
+    status = models.CharField(max_length=20, blank=True)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ('-created_at',)
+
+    def __str__(self):
+        return f'{self.recipient}: {self.message}'
 
 
 class UserProfile(models.Model):

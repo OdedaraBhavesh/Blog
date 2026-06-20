@@ -48,7 +48,27 @@
             &emsp;
             <span><a href="{% url 'dashboard' %}">Dashboard</a></span>
             &emsp;
-            
+            <details class="notification-menu mr-3">
+              <summary aria-label="Notifications">
+                <i class="fa fa-bell"></i>
+                {% if unread_notification_count %}
+                  <span class="badge badge-danger">{{ unread_notification_count }}</span>
+                {% endif %}
+              </summary>
+              <div class="notification-dropdown shadow-sm">
+                <strong class="d-block px-3 py-2 border-bottom">Notifications</strong>
+                {% for notification in navbar_notifications %}
+                  <a class="d-block px-3 py-2 border-bottom {% if not notification.is_read %}notification-unread{% endif %}"
+                     href="{% url 'open_notification' notification.pk %}">
+                    {{ notification.message }}
+                    <small class="d-block text-muted">{{ notification.created_at|timesince }} ago</small>
+                  </a>
+                {% empty %}
+                  <span class="d-block px-3 py-2 text-muted">No notifications yet.</span>
+                {% endfor %}
+                <a class="d-block px-3 py-2 text-center" href="{% url 'notifications' %}">View all</a>
+              </div>
+            </details>
             <span><a href="{% url 'logout' %}">Logout</a></span>
             {% endif %}
           </div>

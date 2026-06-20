@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from unittest.mock import patch
 
-from blogs.models import Blog, Bookmark, Category
+from blogs.models import Blog, Bookmark, Category, Notification
 
 
 class AccountAndPostWorkflowTests(TestCase):
@@ -87,6 +87,12 @@ class AccountAndPostWorkflowTests(TestCase):
         post = Blog.objects.get(title='My Test Blog')
         self.assertEqual(post.author, user)
         self.assertEqual(post.slug, f'my-test-blog-{post.id}')
+        self.assertTrue(Notification.objects.filter(
+            recipient=user,
+            blog=post,
+            notification_type='post_submitted',
+            status='Published',
+        ).exists())
 
     def test_dashboard_counts_only_current_users_posts_and_bookmarks(self):
         writer = User.objects.create_user(username='writer', password='StrongPass123')
@@ -199,3 +205,138 @@ class AccountAndPostWorkflowTests(TestCase):
 
         self.assertContains(response, 'Writer Saved Post')
         self.assertNotContains(response, 'Other Saved Post')
+
+
+class NotificationWorkflowTests(TestCase):
+    def setUp(self):
+        self.author = User.objects.create_user(
+            username='author', password='StrongPass123')
+        self.admin = User.objects.create_superuser(
+            username='admin', email='admin@example.com',
+            password='StrongPass123')
+        self.other = User.objects.create_user(
+            username='other', password='StrongPass123')
+        self.category = Category.objects.create(category_name='News')
+        self.post = Blog.objects.create(
+            title='Review Me',
+            slug='review-me',
+            category=self.category,
+            author=self.author,
+            featured_image='uploads/test.gif',
+            short_description='Description',
+            blog_body='Post body',
+            status='Pending Review',
+        )
+
+    def test_autosave_draft_does_not_create_notification(self):
+        self.client.login(username='author', password='StrongPass123')
+
+        response = self.client.post(reverse('api_save_draft'), {
+            'title': 'Autosaved only',
+            'blog_body': 'Partial body',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Notification.objects.exists())
+
+    def test_submission_alerts_author_and_active_staff(self):
+        from blogs.notifications import notify_post_submitted
+
+        notify_post_submitted(self.post)
+
+        recipients = set(Notification.objects.values_list(
+            'recipient__username', flat=True))
+        self.assertEqual(recipients, {'author', 'admin'})
+
+    def test_admin_status_change_notifies_author(self):
+        self.client.login(username='admin', password='StrongPass123')
+
+        response = self.client.post(
+            reverse('admin:blogs_blog_change', args=[self.post.pk]),
+            {'status': 'Rejected', 'is_featured': '', '_save': 'Save'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.post.refresh_from_db()
+        self.assertEqual(self.post.status, 'Rejected')
+        self.assertEqual(self.post.reviewed_by, self.admin)
+        notification = Notification.objects.get(
+            recipient=self.author, notification_type='status_changed')
+        self.assertEqual(notification.status, 'Rejected')
+        self.assertIn('Pending Review to Rejected', notification.message)
+
+    def test_admin_bulk_status_action_notifies_only_real_changes(self):
+        published = Blog.objects.create(
+            title='Already live', slug='already-live', category=self.category,
+            author=self.author, status='Published')
+        self.client.login(username='admin', password='StrongPass123')
+
+        response = self.client.post(reverse('admin:blogs_blog_changelist'), {
+            'action': 'approve_posts',
+            '_selected_action': [self.post.pk, published.pk],
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.post.refresh_from_db()
+        self.assertEqual(self.post.status, 'Published')
+        self.assertEqual(Notification.objects.filter(
+            notification_type='status_changed').count(), 1)
+
+    def test_navbar_and_dashboard_show_unread_count(self):
+        Notification.objects.create(
+            recipient=self.author, blog=self.post,
+            notification_type='status_changed', status='Published',
+            message='Your post is published.')
+        self.client.login(username='author', password='StrongPass123')
+
+        response = self.client.get(reverse('dashboard'))
+
+        self.assertContains(response, 'Unread Notifications')
+        self.assertEqual(response.context['unread_notification_count'], 1)
+        self.assertContains(response, 'Your post is published.')
+
+    def test_open_notification_marks_read_and_links_to_own_post(self):
+        notification = Notification.objects.create(
+            recipient=self.author, blog=self.post,
+            notification_type='status_changed', status='Rejected',
+            message='Your post was rejected.')
+        self.client.login(username='author', password='StrongPass123')
+
+        response = self.client.get(
+            reverse('open_notification', args=[notification.pk]))
+
+        self.assertRedirects(response, reverse('edit_post', args=[self.post.pk]))
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_read)
+        self.assertIsNotNone(notification.read_at)
+
+    def test_user_cannot_read_another_users_notification(self):
+        notification = Notification.objects.create(
+            recipient=self.author, blog=self.post,
+            notification_type='status_changed', status='Rejected',
+            message='Private notification.')
+        self.client.login(username='other', password='StrongPass123')
+
+        response = self.client.post(
+            reverse('mark_notification_read', args=[notification.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        notification.refresh_from_db()
+        self.assertFalse(notification.is_read)
+
+    def test_mark_all_read_only_updates_current_user(self):
+        own = Notification.objects.create(
+            recipient=self.author, blog=self.post,
+            notification_type='status_changed', message='Own')
+        other = Notification.objects.create(
+            recipient=self.other, blog=self.post,
+            notification_type='status_changed', message='Other')
+        self.client.login(username='author', password='StrongPass123')
+
+        response = self.client.post(reverse('mark_all_notifications_read'))
+
+        self.assertRedirects(response, reverse('notifications'))
+        own.refresh_from_db()
+        other.refresh_from_db()
+        self.assertTrue(own.is_read)
+        self.assertFalse(other.is_read)

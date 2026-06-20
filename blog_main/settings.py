@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
@@ -72,6 +73,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'blogs.context_processors.get_categories',
+                'blogs.context_processors.notifications',
             ],
         },
     },
@@ -140,3 +142,12 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 CRISPY_TEMPLATE_PACK = 'bootstrap4'
+
+# Hugging Face settings are environment-driven so models/providers can be
+# replaced without code changes. The API key is shared with safety moderation.
+HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY', '')
+HF_WRITING_ANALYSIS_MODEL = os.environ.get(
+    'HF_WRITING_ANALYSIS_MODEL', 'Qwen/Qwen2.5-7B-Instruct')
+HF_AI_DETECTOR_MODEL = os.environ.get(
+    'HF_AI_DETECTOR_MODEL', 'openai-community/roberta-base-openai-detector')
+HF_ANALYZER_TIMEOUT = int(os.environ.get('HF_ANALYZER_TIMEOUT', '30'))

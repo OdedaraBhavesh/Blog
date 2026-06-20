@@ -2,7 +2,10 @@ from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.utils.html import format_html
 
-from .models import Bookmark, Category, Blog, Comment, Follow, FollowRequest, Reaction, Tag, UserProfile
+from .models import (Bookmark, Category, Blog, BlogContentAnalysis, Comment,
+                     Follow, FollowRequest, Notification, Reaction, Tag,
+                     UserProfile)
+from .notifications import notify_status_changed
 
 
 @admin.register(Category)
@@ -21,7 +24,7 @@ class TagAdmin(admin.ModelAdmin):
 
 class BlogAdmin(admin.ModelAdmin):
     list_display = ('image_preview', 'title', 'category', 'author',
-                    'status', 'ai_verdict', 'is_featured', 'reading_time', 'created_at')
+                    'status', 'ai_verdict', 'is_featured',  'created_at')
     list_filter = ('status', 'ai_verdict', 'is_featured',
                    'category', 'author', 'created_at')
     search_fields = ('id', 'title', 'short_description',
@@ -100,26 +103,45 @@ class BlogAdmin(admin.ModelAdmin):
 
     @admin.action(description='✅ Approve selected posts (publish)')
     def approve_posts(self, request, queryset):
-        updated = queryset.update(status='Published', reviewed_by=request.user)
+        updated = self._change_status(queryset, 'Published', request.user)
         self.message_user(
             request, f'{updated} post(s) approved and published.')
 
     @admin.action(description='❌ Reject selected posts')
     def reject_posts(self, request, queryset):
-        updated = queryset.update(status='Rejected', reviewed_by=request.user)
+        updated = self._change_status(queryset, 'Rejected', request.user)
         self.message_user(request, f'{updated} post(s) rejected.')
 
     @admin.action(description='↩ Send back to Pending Review')
     def send_back_to_pending(self, request, queryset):
-        updated = queryset.update(
-            status='Pending Review', reviewed_by=request.user)
+        updated = self._change_status(
+            queryset, 'Pending Review', request.user)
         self.message_user(
             request, f'{updated} post(s) sent back to pending review.')
 
     def save_model(self, request, obj, form, change):
+        old_status = None
         if change and 'status' in form.changed_data:
+            old_status = Blog.objects.only('status').get(pk=obj.pk).status
             obj.reviewed_by = request.user
         super().save_model(request, obj, form, change)
+        if old_status is not None:
+            notify_status_changed(obj, old_status)
+
+    @staticmethod
+    def _change_status(queryset, new_status, reviewer):
+        """Run bulk moderation while preserving per-post notifications."""
+        updated = 0
+        for post in queryset.select_related('author'):
+            old_status = post.status
+            if old_status == new_status:
+                continue
+            post.status = new_status
+            post.reviewed_by = reviewer
+            post.save(update_fields=['status', 'reviewed_by', 'updated_at'])
+            notify_status_changed(post, old_status)
+            updated += 1
+        return updated
 
     def has_delete_permission(self, request, obj=None):
         return True
@@ -180,6 +202,36 @@ class BookmarkAdmin(admin.ModelAdmin):
     list_filter = ('created_at',)
     search_fields = ('user__username', 'post__title')
     autocomplete_fields = ('user', 'post')
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('recipient', 'notification_type', 'blog', 'status',
+                    'is_read', 'created_at')
+    list_filter = ('notification_type', 'status', 'is_read', 'created_at')
+    search_fields = ('recipient__username', 'blog__title', 'message')
+    autocomplete_fields = ('recipient', 'blog')
+    readonly_fields = ('created_at', 'read_at')
+
+
+@admin.register(BlogContentAnalysis)
+class BlogContentAnalysisAdmin(admin.ModelAdmin):
+    list_display = ('blog', 'status', 'grammar_score', 'vocabulary_score',
+                    'ai_generated_percentage', 'analyzed_at')
+    list_filter = ('status', 'analyzed_at')
+    search_fields = ('blog__title', 'blog__author__username', 'summary')
+    readonly_fields = (
+        'blog', 'status', 'grammar_score', 'vocabulary_score',
+        'grammar_errors', 'spelling_errors', 'suggestions', 'summary',
+        'ai_generated_percentage', 'content_hash', 'quality_model',
+        'detector_model', 'error_message', 'analyzed_at', 'created_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 admin.site.register(Blog, BlogAdmin)

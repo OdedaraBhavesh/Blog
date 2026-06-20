@@ -1,0 +1,75 @@
+{% if analysis %}
+<div class="card mt-4 mb-4 {% if analysis.has_quality_warning %}border-warning{% else %}border-success{% endif %}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>AI Content Analysis</strong>
+        <span class="badge {% if analysis.status == 'success' %}badge-success{% elif analysis.status == 'partial' %}badge-warning{% else %}badge-secondary{% endif %}">
+            {{ analysis.get_status_display }}
+        </span>
+    </div>
+    <div class="card-body">
+        {% if analysis.has_quality_warning %}
+        <div class="alert alert-warning">
+            This post may benefit from grammar, spelling, or vocabulary improvements.
+        </div>
+        {% endif %}
+
+        {% if analysis.status == 'failed' or analysis.status == 'unavailable' %}
+        <p class="text-muted mb-2">Analysis is currently unavailable. Your post was still saved.</p>
+        {% endif %}
+
+        <div class="row text-center mb-3">
+            <div class="col">
+                <strong class="d-block">Grammar</strong>
+                {{ analysis.grammar_score|default_if_none:'—' }}/100
+            </div>
+            <div class="col">
+                <strong class="d-block">Vocabulary</strong>
+                {{ analysis.vocabulary_score|default_if_none:'—' }}/100
+            </div>
+            <div class="col">
+                <strong class="d-block">AI likelihood</strong>
+                {% if analysis.ai_generated_percentage is not None %}
+                    {{ analysis.ai_generated_percentage }}%
+                {% else %}—{% endif %}
+            </div>
+        </div>
+
+        {% if analysis.summary %}<p>{{ analysis.summary }}</p>{% endif %}
+
+        {% if analysis.grammar_errors %}
+        <h5>Grammar</h5>
+        <ul>
+            {% for issue in analysis.grammar_errors %}
+            <li>
+                <del>{{ issue.original }}</del>
+                {% if issue.suggestion %} → <strong>{{ issue.suggestion }}</strong>{% endif %}
+                {% if issue.explanation %}<small class="d-block text-muted">{{ issue.explanation }}</small>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if analysis.spelling_errors %}
+        <h5>Spelling</h5>
+        <ul>
+            {% for issue in analysis.spelling_errors %}
+            <li>
+                <del>{{ issue.original }}</del>
+                {% if issue.suggestion %} → <strong>{{ issue.suggestion }}</strong>{% endif %}
+                {% if issue.explanation %}<small class="d-block text-muted">{{ issue.explanation }}</small>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if analysis.suggestions %}
+        <h5>Suggested improvements</h5>
+        <ul>{% for suggestion in analysis.suggestions %}<li>{{ suggestion }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        <small class="text-muted d-block">
+            Analyzed {{ analysis.analyzed_at|timesince }} ago. AI-text detection is experimental and may be inaccurate.
+        </small>
+    </div>
+</div>
+{% endif %}

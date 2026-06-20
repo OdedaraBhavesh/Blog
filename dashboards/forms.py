@@ -16,6 +16,16 @@ class BlogPostForm(forms.ModelForm):
         fields = ('title', 'category', 'featured_image',
                   'short_description', 'blog_body')
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Model fields are blank=True so the autosave endpoint can store
+        # partial drafts. Re-enforce them here so a real Publish submission
+        # still requires complete content.
+        self.fields['category'].required = True
+        self.fields['featured_image'].required = True
+        self.fields['short_description'].required = True
+        self.fields['blog_body'].required = True
+
 
 class AddUserForm(UserCreationForm):
     class Meta:

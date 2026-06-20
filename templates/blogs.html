@@ -11,7 +11,7 @@
                 <!-- Post header-->
                 <header class="mb-4">
                     <!-- Post title-->
-                    <h1 class="fw-bolder mb-1">{{ single_blog.title }}</h1>
+                    <h1 class="fw-bolder mb-1" id="readable-title">{{ single_blog.title }}</h1>
                     <!-- Post meta content-->
                     <div class="text-muted fst-italic mb-2">
                         Posted on {{ single_blog.created_at }} by
@@ -24,8 +24,14 @@
                 <figure class="mb-4"><img class="img-fluid rounded" src="{{ single_blog.featured_image.url }}" alt="..." /></figure>
                 <!-- Post content-->
                 <section class="mb-5">
-                    <p class="fs-5 mb-4">{{ single_blog.short_description }}</p>
-                    <p class="fs-5 mb-4">{{ single_blog.blog_body }}</p>
+                    <p class="fs-5 mb-4" id="readable-desc">{{ single_blog.short_description }}</p>
+                    <p class="fs-5 mb-4" id="readable-body">{{ single_blog.blog_body }}</p>
+
+                    <!-- Read Aloud Button -->
+                    <button type="button" id="read-aloud-btn" class="btn btn-outline-dark">
+                        <i class="fa fa-volume-up"></i> Read Aloud
+                    </button>
+
                     <!-- Like Button -->
                     <a href="{% url 'react_post' single_blog.id %}" class="btn btn-success">
                         👍 Like
@@ -98,5 +104,123 @@
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+  const readBtn = document.getElementById('read-aloud-btn');
+  if (!readBtn) return;
+
+  if (!('speechSynthesis' in window)) {
+    readBtn.disabled = true;
+    readBtn.innerHTML = '<i class="fa fa-volume-off"></i> Not supported in this browser';
+    return;
+  }
+
+  const synth = window.speechSynthesis;
+  let isPaused = false;
+  let isSpeaking = false;
+  let chunks = [];
+  let chunkIndex = 0;
+  let keepAliveTimer = null;
+
+  function getReadableText() {
+    const title = document.getElementById('readable-title')?.textContent.trim() || '';
+    const desc = document.getElementById('readable-desc')?.textContent.trim() || '';
+    const body = document.getElementById('readable-body')?.textContent.trim() || '';
+    console.log('Read Aloud source text:', { title, desc, body }); // remove after testing
+    return [title, desc, body].filter(Boolean).join('. ');
+  }
+
+  function splitIntoChunks(text) {
+    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text];
+    return sentences.map(s => s.trim()).filter(Boolean);
+  }
+
+  function setButtonState(label, icon) {
+    readBtn.innerHTML = `<i class="fa ${icon}"></i> ${label}`;
+  }
+
+  function startKeepAlive() {
+    stopKeepAlive();
+    keepAliveTimer = setInterval(function () {
+      if (synth.speaking && !isPaused) {
+        synth.pause();
+        synth.resume();
+      }
+    }, 10000);
+  }
+
+  function stopKeepAlive() {
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
+      keepAliveTimer = null;
+    }
+  }
+
+  function speakNextChunk() {
+    if (chunkIndex >= chunks.length) {
+      isSpeaking = false;
+      isPaused = false;
+      stopKeepAlive();
+      setButtonState('Read Aloud', 'fa-volume-up');
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(chunks[chunkIndex]);
+    utterance.rate = 1;
+
+    utterance.onend = function () {
+      chunkIndex++;
+      speakNextChunk();
+    };
+    utterance.onerror = function (e) {
+      console.error('Speech error on chunk', chunkIndex, chunks[chunkIndex], e);
+      chunkIndex++;
+      speakNextChunk();
+    };
+
+    synth.speak(utterance);
+  }
+
+  readBtn.addEventListener('click', function () {
+    if (isSpeaking && !isPaused) {
+      synth.pause();
+      isPaused = true;
+      stopKeepAlive();
+      setButtonState('Resume', 'fa-play');
+      return;
+    }
+
+    if (isPaused) {
+      synth.resume();
+      isPaused = false;
+      startKeepAlive();
+      setButtonState('Pause', 'fa-pause');
+      return;
+    }
+
+    synth.cancel();
+    chunks = splitIntoChunks(getReadableText());
+    chunkIndex = 0;
+    isSpeaking = true;
+    isPaused = false;
+
+    if (chunks.length === 0) {
+      console.warn('No readable text found — check #readable-title/#readable-desc/#readable-body exist.');
+      isSpeaking = false;
+      return;
+    }
+
+    speakNextChunk();
+    startKeepAlive();
+    setButtonState('Pause', 'fa-pause');
+  });
+
+  window.addEventListener('beforeunload', function () {
+    synth.cancel();
+    stopKeepAlive();
+  });
+})();
+</script>
 
 {% endblock %}

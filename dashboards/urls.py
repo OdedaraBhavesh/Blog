@@ -16,6 +16,14 @@ urlpatterns = [
     path('posts/delete/<int:pk>/', views.delete_post, name='delete_post'),
     # bookmarks
     path('bookmarks/', views.bookmarks, name='dashboard_bookmarks'),
+    # notifications
+    path('notifications/', views.notifications, name='notifications'),
+    path('notifications/<int:pk>/open/',
+         views.open_notification, name='open_notification'),
+    path('notifications/<int:pk>/read/',
+         views.mark_notification_read, name='mark_notification_read'),
+    path('notifications/read-all/', views.mark_all_notifications_read,
+         name='mark_all_notifications_read'),
     # users
     path('users/', views.users, name='users'),
     path('users/add/', views.add_user, name='add_user'),
