@@ -216,7 +216,7 @@ def bookmarks(request):
 def notifications(request):
     user_notifications = Notification.objects.filter(
         recipient=request.user,
-    ).select_related('blog')
+    ).select_related('blog', 'actor')
     return render(request, 'dashboard/notifications.html', {
         'notifications': user_notifications,
     })
@@ -226,7 +226,7 @@ def notifications(request):
 def open_notification(request, pk):
     """Mark one notification read, then send the user to its related post."""
     notification = get_object_or_404(
-        Notification.objects.select_related('blog'),
+        Notification.objects.select_related('blog', 'actor'),
         pk=pk,
         recipient=request.user,
     )
@@ -235,12 +235,20 @@ def open_notification(request, pk):
         notification.read_at = timezone.now()
         notification.save(update_fields=['is_read', 'read_at'])
 
-    post = notification.blog
-    if request.user == post.author:
-        return redirect('edit_post', pk=post.pk)
-    if request.user.has_perm('blogs.change_blog'):
-        return redirect('admin:blogs_blog_change', object_id=post.pk)
-    return redirect('posts')
+    # If the notification is related to a blog post, send the user there.
+    if notification.blog:
+        post = notification.blog
+        if request.user == post.author:
+            return redirect('edit_post', pk=post.pk)
+        if request.user.has_perm('blogs.change_blog'):
+            return redirect('admin:blogs_blog_change', object_id=post.pk)
+        return redirect('posts')
+
+    # Fallbacks for non-blog notifications (e.g. follow requests)
+    if notification.notification_type in ('follow_request', 'follow_accepted') and notification.actor:
+        return redirect('author_profile', username=notification.actor.username)
+
+    return redirect('notifications')
 
 
 @login_required(login_url='login')

@@ -60,6 +60,9 @@
         </div>
 
         {% if user.is_authenticated and user == author %}
+          <div class="d-flex justify-content-center gap-2 mb-3">
+            <a href="{% url 'edit_profile' %}" class="btn btn-outline-secondary btn-sm">Edit Profile</a>
+          </div>
           <form method="POST" action="{% url 'update_profile_privacy' %}" class="mt-3">
             {% csrf_token %}
             <div class="custom-control custom-switch d-inline-block text-left">

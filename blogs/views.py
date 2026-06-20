@@ -2,12 +2,15 @@ from django.http import HttpResponseForbidden, HttpResponseRedirect, JsonRespons
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import Blog, Category, Comment, Reaction, Bookmark, Follow, UserProfile
+from .notifications import notify_follow_request, notify_follow_accepted
 from django.db.models import Q
+from blog_main.forms import ProfileEditForm, UserProfileEditForm
 
 
 def can_view_author_posts(viewer, author):
@@ -64,6 +67,7 @@ def _follow_payload(request, target, follow_status=None):
         'following_count': target.following.filter(status='accepted').count(),
     }
 
+
 def posts_by_category(request, category_id):
     # Fetch the posts that belongs to the category with the id category_id
     posts = visible_posts_for_user(request.user).filter(category=category_id)
@@ -73,15 +77,16 @@ def posts_by_category(request, category_id):
     # except:
     #     # redirect the user to homepage
     #     return redirect('home')
-    
+
     # Use get_object_or_404 when you want to show 404 error page if the category does not exist
     category = get_object_or_404(Category, pk=category_id)
-    
+
     context = {
         'posts': posts,
         'category': category,
     }
     return render(request, 'posts_by_category.html', context)
+
 
 def blogs(request, slug):
     single_blog = get_object_or_404(Blog, slug=slug, status='Published')
@@ -104,8 +109,9 @@ def blogs(request, slug):
     is_bookmarked = False
 
     if request.user.is_authenticated:
-        is_bookmarked = Bookmark.objects.filter(user=request.user, post=single_blog).exists()
-    
+        is_bookmarked = Bookmark.objects.filter(
+            user=request.user, post=single_blog).exists()
+
     context = {
         'single_blog': single_blog,
         'comments': comments,
@@ -121,7 +127,8 @@ def author_profile(request, username):
     can_view_posts = can_view_author_posts(request.user, author)
     posts = Blog.objects.none()
     if can_view_posts:
-        posts = Blog.objects.filter(author=author, status='Published').order_by('-created_at')
+        posts = Blog.objects.filter(
+            author=author, status='Published').order_by('-created_at')
     followers_count = author.followers.filter(status='accepted').count()
     following_count = author.following.filter(status='accepted').count()
     is_following = False
@@ -129,7 +136,8 @@ def author_profile(request, username):
     pending_follow_requests = Follow.objects.none()
 
     if request.user.is_authenticated:
-        follow = Follow.objects.filter(follower=request.user, following=author).first()
+        follow = Follow.objects.filter(
+            follower=request.user, following=author).first()
         is_following = bool(follow and follow.status == 'accepted')
         has_pending_request = bool(follow and follow.status == 'pending')
         if request.user == author:
@@ -225,16 +233,19 @@ def api_user_following(request, user_id):
         'users': [_basic_user_payload(request, user) for user in following],
     })
 
+
 def search(request):
     keyword = request.GET.get('keyword')
-    
-    blogs = visible_posts_for_user(request.user).filter(Q(title__icontains=keyword) | Q(short_description__icontains=keyword) | Q(blog_body__icontains=keyword))
-  
+
+    blogs = visible_posts_for_user(request.user).filter(Q(title__icontains=keyword) | Q(
+        short_description__icontains=keyword) | Q(blog_body__icontains=keyword))
+
     context = {
         'blogs': blogs,
         'keyword': keyword,
     }
     return render(request, 'search.html', context)
+
 
 @login_required(login_url='login')
 def react_post(request, post_id):
@@ -254,6 +265,7 @@ def react_post(request, post_id):
         return redirect(next_url)
 
     return redirect('blogs', slug=post.slug)
+
 
 @login_required(login_url='login')
 def bookmark_post(request, post_id):
@@ -284,6 +296,7 @@ def my_bookmarks(request):
     }
     return render(request, 'my_bookmarks.html', context)
 
+
 def _follow_response(request, target):
     payload = _follow_payload(request, target)
 
@@ -313,6 +326,10 @@ def follow_user(request, user_id):
         follow.status = status
         follow.save(update_fields=['status'])
 
+    # If this resulted in a pending follow request, create a notification
+    if follow.status == 'pending':
+        notify_follow_request(follow)
+
     return _follow_response(request, target)
 
 
@@ -335,6 +352,9 @@ def api_follow(request, user_id):
     if not created and follow.status != 'accepted':
         follow.status = status
         follow.save(update_fields=['status'])
+
+    if follow.status == 'pending':
+        notify_follow_request(follow)
 
     payload = _follow_payload(request, target)
     payload['relationship_id'] = follow.id
@@ -372,6 +392,29 @@ def update_profile_privacy(request):
 
 
 @login_required(login_url='login')
+def edit_profile(request):
+    profile, created = UserProfile.objects.get_or_create(user=request.user)
+    if request.method == 'POST':
+        form = ProfileEditForm(request.POST, instance=request.user)
+        profile_form = UserProfileEditForm(request.POST, request.FILES, instance=profile)
+        if form.is_valid() and profile_form.is_valid():
+            form.save()
+            profile_form.save()
+            messages.success(request, 'Profile updated successfully.')
+            return redirect('author_profile', username=request.user.username)
+        else:
+            messages.error(request, 'Please fix the errors below.')
+    else:
+        form = ProfileEditForm(instance=request.user)
+        profile_form = UserProfileEditForm(instance=profile)
+
+    return render(request, 'profile_edit.html', {
+        'form': form,
+        'profile_form': profile_form,
+    })
+
+
+@login_required(login_url='login')
 @require_POST
 def respond_follow_request(request, request_id):
     follow_request = get_object_or_404(
@@ -381,6 +424,7 @@ def respond_follow_request(request, request_id):
     if action == 'accept':
         follow_request.status = 'accepted'
         follow_request.save(update_fields=['status'])
+        notify_follow_accepted(follow_request)
     elif action == 'decline':
         follow_request.delete()
 
@@ -394,6 +438,7 @@ def api_accept_follow(request, request_id):
         Follow, id=request_id, following=request.user, status='pending')
     follow_request.status = 'accepted'
     follow_request.save(update_fields=['status'])
+    notify_follow_accepted(follow_request)
     return JsonResponse({'status': 'accepted', 'request_id': follow_request.id})
 
 
@@ -437,6 +482,7 @@ def author_followers(request, username):
             for item in following
         ],
     })
+
 
 def post_detail(request, slug):
     post = Blog.objects.get(slug=slug)

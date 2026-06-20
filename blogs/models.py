@@ -136,6 +136,8 @@ class BlogContentAnalysis(models.Model):
 NOTIFICATION_TYPES = (
     ("post_submitted", "Post submitted"),
     ("status_changed", "Post status changed"),
+    ("follow_request", "Follow request"),
+    ("follow_accepted", "Follow accepted"),
 )
 
 
@@ -145,7 +147,9 @@ class Notification(models.Model):
     recipient = models.ForeignKey(
         User, related_name='notifications', on_delete=models.CASCADE)
     blog = models.ForeignKey(
-        Blog, related_name='notifications', on_delete=models.CASCADE)
+        Blog, related_name='notifications', on_delete=models.CASCADE, null=True, blank=True)
+    actor = models.ForeignKey(
+        User, related_name='actor_notifications', on_delete=models.SET_NULL, null=True, blank=True)
     notification_type = models.CharField(
         max_length=30, choices=NOTIFICATION_TYPES)
     message = models.CharField(max_length=255)

@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% load crispy_forms_tags %}
+
+<h3 class="text-center">Edit Profile</h3>
+<form action="{% url 'edit_profile' %}" method="POST" enctype="multipart/form-data" style="max-width:700px; margin:auto;">
+    {% csrf_token %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5>User details</h5>
+            {{ form | crispy }}
+        </div>
+    </div>
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5>Profile</h5>
+            {{ profile_form | crispy }}
+        </div>
+    </div>
+    <button type="submit" class="btn btn-warning">Save changes</button>
+</form>
+{% endblock %}
