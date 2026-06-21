@@ -4,3 +4,4 @@ django-crispy-forms
 Pillow
 python-dotenv
 requests
+django-jazzmin
