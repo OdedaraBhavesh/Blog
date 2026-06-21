@@ -13,6 +13,7 @@
             Notifications
             {% if unread_notification_count %}<span class="badge badge-danger">{{ unread_notification_count }}</span>{% endif %}
         </a>
+        <a href="{% url 'password_change' %}" class="nav-link text-dark {% if '/password_change/' in request.path %}bg-warning{% endif %}">Change Password</a>
         <a href="{% url 'logout' %}" class="nav-link text-dark">Logout</a>
     </div>
 </div>

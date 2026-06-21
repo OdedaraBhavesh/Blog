@@ -1,11 +1,22 @@
 
 from django.shortcuts import redirect, render
+from django.contrib import messages
+from django.contrib.auth import views as auth_views
 
 from blogs.views import visible_posts_for_user
 from assignments.models import About
 from .forms import RegistrationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import auth
+
+class PasswordResetWithMessageView(auth_views.PasswordResetView):
+    def form_valid(self, form):
+        messages.success(
+            self.request,
+            'If an account exists for that email, we have sent password reset instructions.'
+        )
+        return super().form_valid(form)
+
 
 def home(request):
     visible_posts = visible_posts_for_user(request.user)
@@ -31,9 +42,9 @@ def register(request):
         if form.is_valid():
             user = form.save()
             auth.login(request, user)
+            messages.success(request, 'Welcome!')
             return redirect('home')
-        else:
-            print(form.errors)
+        messages.error(request, 'Please correct the highlighted errors and try again.')
     else:
         form = RegistrationForm()
     context = {
@@ -46,16 +57,15 @@ def login(request):
     if request.method == 'POST':
         form = AuthenticationForm(request, request.POST)
         if form.is_valid():
-            username = form.cleaned_data['username']
-            password = form.cleaned_data['password']
-
-            user = auth.authenticate(username=username, password=password)
-            if user is not None:
-                auth.login(request, user)
-                if user.is_staff or user.is_superuser:
-                    return redirect('dashboard')
+            user = form.get_user()
+            auth.login(request, user)
+            messages.success(request, 'Welcome back!')
+            if user.is_staff or user.is_superuser:
+                return redirect('dashboard')
             return redirect('home')
-    form = AuthenticationForm()
+        messages.error(request, 'Wrong credentials please provide correct.')
+    else:
+        form = AuthenticationForm()
     context = {
         'form': form,
     }
