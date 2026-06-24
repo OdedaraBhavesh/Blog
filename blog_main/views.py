@@ -2,10 +2,6 @@
 from django.shortcuts import redirect, render
 from django.contrib import messages
 from django.contrib.auth import views as auth_views
-from django.urls import reverse
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from django.contrib.auth.tokens import default_token_generator
 
 from blogs.views import visible_posts_for_user
 from assignments.models import About
@@ -15,12 +11,6 @@ from django.contrib import auth
 
 
 class PasswordResetWithMessageView(auth_views.PasswordResetView):
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # Pass request to template context to enable absolute URL building
-        context['request'] = self.request
-        return context
-
     def form_valid(self, form):
         messages.success(
             self.request,
