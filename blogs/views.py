@@ -161,7 +161,8 @@ def author_profile(request, username):
 
 
 def blogger_directory(request):
-    bloggers = User.objects.select_related('profile').order_by('username')
+    bloggers = User.objects.select_related('profile').filter(
+        is_superuser=False, is_staff=False).order_by('username')
     follow_map = {}
 
     if request.user.is_authenticated:
@@ -396,7 +397,8 @@ def edit_profile(request):
     profile, created = UserProfile.objects.get_or_create(user=request.user)
     if request.method == 'POST':
         form = ProfileEditForm(request.POST, instance=request.user)
-        profile_form = UserProfileEditForm(request.POST, request.FILES, instance=profile)
+        profile_form = UserProfileEditForm(
+            request.POST, request.FILES, instance=profile)
         if form.is_valid() and profile_form.is_valid():
             form.save()
             profile_form.save()
