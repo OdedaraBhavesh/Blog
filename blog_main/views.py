@@ -1,4 +1,5 @@
 
+from django.conf import settings
 from django.shortcuts import redirect, render
 from django.contrib import messages
 from django.contrib.auth import views as auth_views
@@ -17,6 +18,11 @@ class PasswordResetWithMessageView(auth_views.PasswordResetView):
             'If an account exists for that email, we have sent password reset instructions.'
         )
         return super().form_valid(form)
+
+    def get_email_options(self):
+        return {
+            'from_email': settings.DEFAULT_FROM_EMAIL,
+        }
 
 
 def home(request):
