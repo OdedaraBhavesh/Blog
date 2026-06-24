@@ -26,9 +26,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-n8^@1$ll9wyo)$h5h+5xq-a7a!vnn&@5(gi#!3*9#t@=nqc&al'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['blog-spno.onrender.com', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['blog-spno.onrender.com', 'localhost', '127.0.0.1', '*']
 
 
 # Application definition
@@ -154,7 +154,8 @@ EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', os.environ.get('EMAIL_HOST_USER', 'noreply@blogsphere.com'))
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', os.environ.get(
+    'EMAIL_HOST_USER', 'noreply@blogsphere.com'))
 
 # Set SITE_ID but handle missing Site gracefully
 SITE_ID = 1
@@ -170,3 +171,30 @@ HF_WRITING_ANALYSIS_MODEL = os.environ.get(
 HF_AI_DETECTOR_MODEL = os.environ.get(
     'HF_AI_DETECTOR_MODEL', 'openai-community/roberta-base-openai-detector')
 HF_ANALYZER_TIMEOUT = int(os.environ.get('HF_ANALYZER_TIMEOUT', '30'))
+
+# Logging Configuration for debugging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
