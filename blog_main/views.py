@@ -2,6 +2,10 @@
 from django.shortcuts import redirect, render
 from django.contrib import messages
 from django.contrib.auth import views as auth_views
+from django.urls import reverse
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import default_token_generator
 
 from blogs.views import visible_posts_for_user
 from assignments.models import About
@@ -9,7 +13,14 @@ from .forms import RegistrationForm
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import auth
 
+
 class PasswordResetWithMessageView(auth_views.PasswordResetView):
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Pass request to template context to enable absolute URL building
+        context['request'] = self.request
+        return context
+
     def form_valid(self, form):
         messages.success(
             self.request,
@@ -20,9 +31,10 @@ class PasswordResetWithMessageView(auth_views.PasswordResetView):
 
 def home(request):
     visible_posts = visible_posts_for_user(request.user)
-    featured_posts = visible_posts.filter(is_featured=True).order_by('updated_at')
+    featured_posts = visible_posts.filter(
+        is_featured=True).order_by('updated_at')
     posts = visible_posts.filter(is_featured=False)
-    
+
     # Fetch about us
     try:
         about = About.objects.get()
@@ -44,7 +56,8 @@ def register(request):
             auth.login(request, user)
             messages.success(request, 'Welcome!')
             return redirect('home')
-        messages.error(request, 'Please correct the highlighted errors and try again.')
+        messages.error(
+            request, 'Please correct the highlighted errors and try again.')
     else:
         form = RegistrationForm()
     context = {
